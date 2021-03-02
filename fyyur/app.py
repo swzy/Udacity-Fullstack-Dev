@@ -1,3 +1,5 @@
+# TODO: Form validation - includes forms.py, forms, models, and potentially code.
+
 # ----------------------------------------------------------------------------#
 # Imports
 # ----------------------------------------------------------------------------#
@@ -5,13 +7,12 @@
 import json
 import dateutil.parser
 import babel
-import datetime
-from flask import Flask, render_template, request, Response, flash, redirect, url_for
+from datetime import datetime
+from flask import Flask, render_template, request, flash, redirect, url_for
 from flask_moment import Moment
 from flask_sqlalchemy import SQLAlchemy
 import logging
 from logging import Formatter, FileHandler
-from flask_wtf import Form
 from forms import *
 from flask_migrate import Migrate
 
@@ -25,21 +26,18 @@ app.config.from_object('config')
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
-# TODO: connect to a local postgresql database
-
 # ----------------------------------------------------------------------------#
 # Models.
 # ----------------------------------------------------------------------------#
 
-# Table should probably have a start time
 shows = db.Table('shows',
-                 db.Column('venue_id', db.Integer, db.ForeignKey('venue.id'), primary_key=True),
+                 db.Column('id', db.Integer, primary_key=True),
+                 db.Column('venue_id', db.Integer, db.ForeignKey('venue.id'), primary_key=True, autoincrement=True),
                  db.Column('artist_id', db.Integer, db.ForeignKey('artist.id'), primary_key=True),
                  db.Column('start_time', db.DateTime, default=datetime.utcnow, nullable=False)
                  )
 
 
-# Should probably have a past shows
 class Venue(db.Model):
     __tablename__ = 'venue'
     id = db.Column(db.Integer, primary_key=True)
@@ -58,10 +56,7 @@ class Venue(db.Model):
                               secondary=shows,
                               backref=db.backref('venues', lazy=True))
 
-    # TODO: implement any missing fields, as a database migration using Flask-Migrate
-
-
-# Should also probably have a past shows
+# Should look at form validation
 class Artist(db.Model):
     __tablename__ = 'artist'
     id = db.Column(db.Integer, primary_key=True)
@@ -76,10 +71,6 @@ class Artist(db.Model):
     seeking_venue = db.Column(db.String)
     seeking_description = db.Column(db.String)
 
-    # TODO: implement any missing fields, as a database migration using Flask-Migrate
-
-
-# TODO Implement Show and Artist models, and complete all model relationships and properties, as a database migration.
 
 # ----------------------------------------------------------------------------#
 # Filters.
@@ -199,12 +190,14 @@ def search_venues():
 def show_venue(venue_id):
     # Need to fill upcoming/past shows - Might need to add a column, etc.
     # Hold on this until artist gets fleshed out more.
-
+    venue = None
     try:
         venue = Venue.query.get(venue_id)
         # Clean multi-value string data from database
         genre_list = venue.genres.replace('{', '').replace('}', '').split(',')
         venue.genres = genre_list
+
+        print(venue.website)
     except Exception as e:
         print(e)
         # data = list(filter(lambda d: d['id'] == venue_id, [data1, data2, data3]))[0]
@@ -218,17 +211,6 @@ def show_venue(venue_id):
 def create_venue_form():
     form = VenueForm()
     return render_template('forms/new_venue.html', form=form)
-
-def set_model_attr(genre_list, form_obj, model_obj):
-    try:
-        for k, v in form_obj:
-            if k == 'genres':
-                setattr(model_obj, k, genre_list)
-                continue
-            setattr(model_obj, k, v)
-    except Exception as e:
-        print(f'An error occurred with parsing the genre list: {e}')
-    return model_obj
 
 
 @app.route('/venues/create', methods=['POST'])
@@ -270,6 +252,7 @@ def delete_venue(venue_id):
         db.session.commit()
         flash(f'Venue {name} was successfully deleted.')
     except Exception as e:
+        print(e)
         db.session.rollback()
         flash(f'Venue could not be deleted.', 'error')
 
@@ -315,6 +298,7 @@ def search_artists():
 
 @app.route('/artists/<int:artist_id>')
 def show_artist(artist_id):
+    artist = None
     try:
         artist = Artist.query.get(artist_id)
         # Clean multi-value string data from database
@@ -345,6 +329,8 @@ def edit_artist(artist_id):
         "image_link": "https://images.unsplash.com/photo-1549213783-8284d0336c4f?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=300&q=80"
     }
     # TODO: populate form with fields from artist with ID <artist_id>
+
+
     return render_template('forms/edit_artist.html', form=form, artist=artist)
 
 
@@ -466,6 +452,10 @@ def shows():
         "artist_image_link": "https://images.unsplash.com/photo-1558369981-f9ca78462e61?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=794&q=80",
         "start_time": "2035-04-15T20:00:00.000Z"
     }]
+    # show_list = shows.query.all()
+    # for shows in show_list:
+    #     print(shows)
+
     return render_template('pages/shows.html', shows=data)
 
 
@@ -480,12 +470,26 @@ def create_shows():
 def create_show_submission():
     # called to create new shows in the db, upon submitting new show listing form
     # TODO: insert form data as a new Show record in the db, instead
+    artist_id = -1
+    venue_id = -1
+    start_time = -1
+    show_form_data = request.form.items()
+    for fields in show_form_data:
+        if 'artist' in fields[0]:
+            artist_id = fields[1]
+        elif 'venue' in fields[0]:
+            venue_id = fields[1]
+        else:
+            start_time = fields[1]
 
-    # on successful db insert, flash success
-    flash('Show was successfully listed!')
-    # TODO: on unsuccessful db insert, flash an error instead.
-    # e.g., flash('An error occurred. Show could not be listed.')
-    # see: http://flask.pocoo.org/docs/1.0/patterns/flashing/
+    try:
+        db.session.execute(f"INSERT INTO shows (venue_id, artist_id, start_time) VALUES ({venue_id}, {artist_id}, '%s');" % start_time)
+        db.session.commit()
+        flash('Show was successfully listed!')
+    except Exception as e:
+        flash('Show was not listed.')
+        print(f'There was an issue with inserting the show: {e}')
+
     return render_template('pages/home.html')
 
 
@@ -509,9 +513,22 @@ if not app.debug:
     app.logger.addHandler(file_handler)
     app.logger.info('errors')
 
+
+def set_model_attr(genre_list, form_obj, model_obj):
+    try:
+        for k, v in form_obj:
+            if k == 'genres':
+                setattr(model_obj, k, genre_list)
+                continue
+            setattr(model_obj, k, v)
+    except Exception as e:
+        print(f'An error occurred with parsing the genre list: {e}')
+    return model_obj
+
 # ----------------------------------------------------------------------------#
 # Launch.
 # ----------------------------------------------------------------------------#
+
 
 # Default port:
 if __name__ == '__main__':
