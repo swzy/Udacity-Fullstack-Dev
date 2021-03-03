@@ -1,16 +1,17 @@
 # ----------------------------------------------------------------------------#
 # Imports
 # ----------------------------------------------------------------------------#
+import traceback
 
 import dateutil.parser
 import babel
 from flask import Flask, render_template, request, flash, redirect, url_for
 from flask_moment import Moment
-from flask_sqlalchemy import SQLAlchemy
 import logging
 from logging import Formatter, FileHandler
 from forms import *
 from flask_migrate import Migrate
+from models import *
 
 # ----------------------------------------------------------------------------#
 # App Config.
@@ -19,52 +20,8 @@ from flask_migrate import Migrate
 app = Flask(__name__)
 moment = Moment(app)
 app.config.from_object('config')
-db = SQLAlchemy(app)
+db.init_app(app)
 migrate = Migrate(app, db)
-
-# ----------------------------------------------------------------------------#
-# Models.
-# ----------------------------------------------------------------------------#
-
-shows_table = db.Table('shows',
-     db.Column('venue_id', db.Integer, db.ForeignKey('venue.id'), primary_key=True),
-     db.Column('artist_id', db.Integer, db.ForeignKey('artist.id'), primary_key=True),
-     db.Column('start_time', db.DateTime, default=datetime.utcnow, nullable=False)
-     )
-
-
-class Venue(db.Model):
-    __tablename__ = 'venue'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String, nullable=False)
-    city = db.Column(db.String(120), nullable=False)
-    state = db.Column(db.String(120), nullable=False)
-    address = db.Column(db.String(120), nullable=False)
-    phone = db.Column(db.String(120))
-    image_link = db.Column(db.String(500))
-    facebook_link = db.Column(db.String(120))
-    genres = db.Column(db.String)
-    website = db.Column(db.String)
-    seeking_talent = db.Column(db.String)
-    seeking_description = db.Column(db.String)
-    artists = db.relationship('Artist',
-                              secondary=shows_table,
-                              backref=db.backref('venues', lazy='joined'))
-
-
-class Artist(db.Model):
-    __tablename__ = 'artist'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String, nullable=False)
-    city = db.Column(db.String(120), nullable=False)
-    state = db.Column(db.String(120), nullable=False)
-    phone = db.Column(db.String(120))
-    genres = db.Column(db.String(120), nullable=False)
-    image_link = db.Column(db.String(500))
-    facebook_link = db.Column(db.String(120))
-    website = db.Column(db.String)
-    seeking_venue = db.Column(db.String)
-    seeking_description = db.Column(db.String)
 
 
 # ----------------------------------------------------------------------------#
@@ -494,33 +451,46 @@ def set_model_attr(form_obj, model_obj, genre_list):
     return model_obj
 
 
+# Get an id (Venue or Artist), filter condition based on "past or present" show_type, and based on model type give \
+# back the right body
 def get_shows(model_id, model_type, show_type):
-    shows_raw = []
+    shows_raw = None
     body = []
+
     try:
         if show_type.lower() == 'past':
-            shows_raw = db.session.query(shows_table) \
+            shows_raw = db.session.query(Venue, Artist, shows_table.c.start_time) \
+                .select_from(shows_table) \
+                .join(Artist) \
                 .filter(shows_table.c.venue_id == Venue.id) \
-                .filter(shows_table.c.start_time <= datetime.now()) \
+                .filter(shows_table.c.artist_id == Artist.id) \
+                .filter(shows_table.c.start_time < datetime.now()) \
                 .all()
         elif show_type.lower() == 'upcoming':
-            shows_raw = db.session.query(shows_table) \
+            shows_raw = db.session.query(Venue, Artist, shows_table.c.start_time) \
+                .select_from(shows_table) \
+                .join(Artist) \
                 .filter(shows_table.c.venue_id == Venue.id) \
+                .filter(shows_table.c.artist_id == Artist.id) \
                 .filter(shows_table.c.start_time > datetime.now()) \
                 .all()
-        body = []
-        # (venue_id, artist_id, start_time)
-        for entry in shows_raw:
+
+        # (Venue, Artist, start_time)
+        for results in shows_raw:
             past_shows = {}
-            venue_id = entry[0]
-            artist_id = entry[1]
-            start_time = entry[2]
+            venue_id = results[0].id
+            artist_id = results[1].id
+            start_time = results[2]
+
+            # Based on how jinja template and show tiles are arranged.
+            # Shows via Venue want artist data and via Artist want venue
             if model_type.lower() == 'venue' and venue_id == model_id:
                 artist = Artist.query.get(artist_id)
                 past_shows['artist_id'] = artist.id
                 past_shows['artist_name'] = artist.name
                 past_shows['artist_image_link'] = artist.image_link
                 past_shows['start_time'] = str(start_time)
+
             elif model_type.lower() == 'artist' and artist_id == model_id:
                 venue = Venue.query.get(venue_id)
                 past_shows['venue_id'] = venue.id
@@ -529,9 +499,10 @@ def get_shows(model_id, model_type, show_type):
                 past_shows['start_time'] = str(start_time)
             if bool(past_shows):
                 body.append(past_shows)
+
     except Exception as e:
         print("An issue with db.session.query() occurred.")
-        print(e)
+        print(traceback.format_exc(), e)
     return body
 
 # ----------------------------------------------------------------------------#
