@@ -1,7 +1,8 @@
 from datetime import datetime
 from flask_wtf import Form
 from wtforms import StringField, SelectField, SelectMultipleField, DateTimeField, BooleanField
-from wtforms.validators import DataRequired, AnyOf, URL
+from wtforms.validators import DataRequired, AnyOf, URL, Regexp, Optional
+
 
 class ShowForm(Form):
     artist_id = StringField(
@@ -83,19 +84,21 @@ class VenueForm(Form):
         'address', validators=[DataRequired()]
     )
     phone = StringField(
-        'phone'
+        'phone', validators=[
+            Regexp("1?-?\(?[0-9]{3}[\-\)][0-9]{3}-[0-9]{4}$",
+                   message="Please input with the correct format ex. 123-456-7890")]
     )
     image_link = StringField(
-        'image_link'
+        'image_link', validators=[Optional(), URL()]
     )
     website = StringField(
-        'website'
+        'website', validators=[Optional(), URL()]
     )
     seeking_talent = BooleanField(
-        'seeking_talent'
+        'seeking_talent', validators=[Optional()]
     )
     seeking_description = StringField(
-        'seeking_description'
+        'seeking_description', validators=[Optional()]
     )
     genres = SelectMultipleField(
         # TODO implement enum restriction
@@ -123,7 +126,7 @@ class VenueForm(Form):
         ]
     )
     facebook_link = StringField(
-        'facebook_link', validators=[URL()]
+        'facebook_link', validators=[Optional(), URL()]
     )
 
 class ArtistForm(Form):
@@ -190,11 +193,12 @@ class ArtistForm(Form):
         ]
     )
     phone = StringField(
-        # TODO implement validation logic for state
-        'phone'
+        'phone', validators=[
+            Regexp("1?-?\(?[0-9]{3}[\-\)][0-9]{3}-[0-9]{4}$",
+                   message="Please input with the correct format ex. 123-456-7890")]
     )
     image_link = StringField(
-        'image_link'
+        'image_link', validators=[Optional(), URL()]
     )
     genres = SelectMultipleField(
         # TODO implement enum restriction
@@ -223,16 +227,14 @@ class ArtistForm(Form):
     )
     facebook_link = StringField(
         # TODO implement enum restriction
-        'facebook_link', validators=[URL()]
+        'facebook_link', validators=[Optional(), URL()]
     )
     website = StringField(
-        'website'
+        'website', validators=[Optional(), URL()]
     )
     seeking_venue = BooleanField(
-        'seeking_venue'
+        'seeking_venue', validators=[Optional()]
     )
     seeking_description = StringField(
-        'seeking_description'
+        'seeking_description', validators=[Optional()]
     )
-
-# TODO IMPLEMENT NEW ARTIST FORM AND NEW SHOW FORM
