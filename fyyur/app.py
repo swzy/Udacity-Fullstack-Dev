@@ -71,16 +71,19 @@ def venues():
             body.append({
                 "city": location.city,
                 "state": location.state,
+                # Set comprehension
                 "venues": [{
                     "id": venue.id,
                     "name": venue.name,
-                    "num_upcoming_shows": len(get_shows(venue.id, 'venue', 'upcoming'))
+                    "num_upcoming_shows":
+                        len(get_shows(venue.id, 'venue', 'upcoming'))
                 } for venue in all_venues if venue.city == location.city
                     and venue.state == location.state]
             })
 
     except Exception as e:
-        print(f'Something went wrong with loading the Venue page: {traceback.format_exc(), e}')
+        print(f'Something went wrong with loading the Venue page: '
+              f'{traceback.format_exc(), e}')
 
     return render_template('pages/venues.html', areas=body)
 
@@ -341,10 +344,13 @@ def create_artist_submission():
 @app.route('/shows')
 def shows():
     data = []
-    shows_query_result = db.session.query(shows_table) \
-        .filter(shows_table.c.artist_id == Artist.id) \
-        .all()
+    # shows_query_result = db.session.query(shows_table) \
+    #     .filter(shows_table.c.artist_id == Artist.id) \
+    #     .all()
+    shows_query_result = Show.query.all()
+
     print(shows_query_result)
+
     for results in shows_query_result:
         body = {}
         artist = Artist.query.get(results[1])   # artist_id
@@ -377,6 +383,7 @@ def create_show_submission():
         start_time = -1
         show_form_data = request.form.items()
         for fields in show_form_data:
+            print(fields)
             if 'artist' in fields[0]:
                 artist_id = fields[1]
             elif 'venue' in fields[0]:
@@ -385,9 +392,17 @@ def create_show_submission():
                 start_time = fields[1]
 
         try:
-            shows_table.c.venue_id = venue_id
-            shows_table.c.artist_id = artist_id
-            shows_table.c.start_time = start_time
+            print(shows_table.c.venue_id)
+            print(shows_table.c.artist_id)
+            print(shows_table.c.start_time)
+            new_venue = Venue.query.get(venue_id)
+            new_venue.artists = Artist.query.get(artist_id)
+
+            # new_show = shows(venue_id=venue_id, artist_id=artist_id, start_time=start_time)
+            # shows_table.c.venue_id = venue_id
+            # shows_table.c.artist_id = artist_id
+            # shows_table.c.start_time = start_time
+            db.session.add(new_show)
             db.session.commit()
             flash('Show was successfully listed!')
         except Exception as e:
