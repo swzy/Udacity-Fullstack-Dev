@@ -5,7 +5,14 @@ import traceback
 
 import dateutil.parser
 import babel
-from flask import Flask, render_template, request, flash, redirect, url_for
+from flask import (
+    Flask,
+    render_template,
+    request,
+    flash,
+    redirect,
+    url_for
+)
 from flask_moment import Moment
 import logging
 from logging import Formatter, FileHandler
@@ -28,6 +35,8 @@ migrate = Migrate(app, db)
 # Filters.
 # ----------------------------------------------------------------------------#
 
+# This import and implementation of babel breaks on WindowsOS
+# for some unknown reason.
 def format_datetime(value, format='medium'):
     date = dateutil.parser.parse(value)
     if format == 'full':
@@ -57,55 +66,21 @@ def venues():
     body = []  # Hold final list of data
     try:
         all_venues = Venue.query.all()
-        location_list = []  # Keep tuples of cities "seen"; Need to initialize to enumerate
-        for venue in all_venues:
-            data_format = {
-                "id": -1,
-                "city": None,
-                "state": None,
+        locations = Venue.query.distinct(Venue.city, Venue.state).all()
+        for location in locations:
+            body.append({
+                "city": location.city,
+                "state": location.state,
                 "venues": [{
-                    "id": None,
-                    "name": None,
+                    "id": venue.id,
+                    "name": venue.name,
                     "num_upcoming_shows": len(get_shows(venue.id, 'venue', 'upcoming'))
-                }]
-            }
-            location_tuple = (venue.city, venue.state)
-
-            if location_tuple not in location_list:
-                data_format['id'] = len(location_list)
-                location_list.append(location_tuple)
-                # If location has not been seen, then we create a new body entry
-                data_format['city'] = location_tuple[0]
-                data_format['state'] = location_tuple[1]
-                data_format['venues'][0] = {
-                    "id": venue.id,
-                    "name": venue.name,
-                    "num_upcoming_shows": 0
-                }
-                body.append(data_format)
-            else:
-                venue_to_add = {
-                    "id": venue.id,
-                    "name": venue.name,
-                    "num_upcoming_shows": 0
-                }
-                # If location has been seen, find the location entry and
-                # append the venue to the venues list, if it is not a duplicate
-                location_index = location_list.index(location_tuple)
-
-                for locations in body:
-                    # After looking through body, checking for a dupe venue
-                    # Because body and venue elements are unique, break if found.
-                    if location_index == locations['id']:
-                        for cnt, ven in enumerate(locations['venues']):
-                            if venue.name == ven['name']:
-                                break
-                            elif venue.name != ven['name'] and cnt == len(locations['venues']) - 1:
-                                locations['venues'].append(venue_to_add)
-                        break
+                } for venue in all_venues if venue.city == location.city
+                    and venue.state == location.state]
+            })
 
     except Exception as e:
-        print(e)
+        print(f'Something went wrong with loading the Venue page: {traceback.format_exc(), e}')
 
     return render_template('pages/venues.html', areas=body)
 
@@ -395,25 +370,32 @@ def create_shows():
 
 @app.route('/shows/create', methods=['POST'])
 def create_show_submission():
-    artist_id = -1
-    venue_id = -1
-    start_time = -1
-    show_form_data = request.form.items()
-    for fields in show_form_data:
-        if 'artist' in fields[0]:
-            artist_id = fields[1]
-        elif 'venue' in fields[0]:
-            venue_id = fields[1]
-        else:
-            start_time = fields[1]
+    form = ShowForm(request.form, csrf_enabled=False)
+    if form.validate():
+        artist_id = -1
+        venue_id = -1
+        start_time = -1
+        show_form_data = request.form.items()
+        for fields in show_form_data:
+            if 'artist' in fields[0]:
+                artist_id = fields[1]
+            elif 'venue' in fields[0]:
+                venue_id = fields[1]
+            else:
+                start_time = fields[1]
 
-    try:
-        db.session.execute(f"INSERT INTO shows (venue_id, artist_id, start_time) VALUES ({venue_id}, {artist_id}, '%s');" % start_time)
-        db.session.commit()
-        flash('Show was successfully listed!')
-    except Exception as e:
-        flash('Show was not listed.')
-        print(f'There was an issue with inserting the show: {e}')
+        try:
+            shows_table.c.venue_id = venue_id
+            shows_table.c.artist_id = artist_id
+            shows_table.c.start_time = start_time
+            db.session.commit()
+            flash('Show was successfully listed!')
+        except Exception as e:
+            flash('Show was not listed.')
+            print(f'There was an issue with inserting the show: {e}')
+    else:
+        flash("There was an issue with your form.")
+        render_template('forms/new_show.html', form=form)
 
     return render_template('pages/home.html')
 
