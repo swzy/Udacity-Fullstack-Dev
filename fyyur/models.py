@@ -10,7 +10,7 @@ db = SQLAlchemy()
 
 class Show(db.Model):
     __tablename__ = 'shows'
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, server_default='1')
     venue_id = db.Column('venue_id', db.Integer, db.ForeignKey('venue.id'), primary_key=True)
     artist_id = db.Column('artist_id', db.Integer, db.ForeignKey('artist.id'), primary_key=True)
     start_time = db.Column('start_time', db.DateTime, default=datetime.utcnow, nullable=False)
