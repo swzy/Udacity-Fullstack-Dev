@@ -92,15 +92,15 @@ def venues():
 def search_venues():
     venue_list = []
     if request.method == 'POST':
-        search_term = request.form.get('search_term')
-        all_venues = Venue.query.all()
-        for venue in all_venues:
-            if search_term.lower() in venue.name.lower():
-                venue_list.append({
-                    "id": venue.id,
-                    "name": venue.name,
-                    "num_upcoming_shows": 0
-                })
+        search_term = request.form.get('search_term', '')
+        possible_venues = Venue.query.filter(
+            Venue.name.ilike(f'% {search_term} %'))
+        for venue in possible_venues:
+            venue_list.append({
+                "id": venue.id,
+                "name": venue.name,
+                "num_upcoming_shows": 0
+            })
 
     response = {
         "count": len(venue_list),
@@ -193,14 +193,8 @@ def delete_venue(venue_id):
 
 @app.route('/artists')
 def artists():
-    data = []
     all_artists = Artist.query.all()
-    for artist in all_artists:
-        data.append({
-            "id": artist.id,
-            "name": artist.name
-        })
-    return render_template('pages/artists.html', artists=data)
+    return render_template('pages/artists.html', artists=all_artists)
 
 
 @app.route('/artists/search', methods=['POST'])
