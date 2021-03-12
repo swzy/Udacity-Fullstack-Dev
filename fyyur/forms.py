@@ -1,9 +1,9 @@
 from datetime import datetime
 from enum import Enum
 
-from flask_wtf import Form
+from flask_wtf import FlaskForm as Form
 from wtforms import StringField, SelectField, SelectMultipleField, DateTimeField, BooleanField
-from wtforms.validators import DataRequired, AnyOf, URL, Regexp, Optional
+from wtforms.validators import DataRequired, URL, Regexp, Optional
 
 
 class GenreEnum(Enum):
@@ -42,7 +42,7 @@ class ShowForm(Form):
     start_time = DateTimeField(
         'start_time',
         validators=[DataRequired()],
-        default= datetime.today()
+        default=datetime.today()
     )
 
 
